@@ -1,31 +1,24 @@
 <!DOCTYPE html>
-<html lang="zh">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>App下载落地页</title>
-  <script>
-    function detectDevice() {
-      const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-      if (/android/i.test(userAgent)) {
-        window.location.href = "https://play.google.com/store/apps/details?id=com.google.android.youtube";
-      } else if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
-        window.location.href = "https://apps.apple.com/app/";
-      } else {
-        alert("请使用Android或iOS设备访问此页面。");
-      }
-    }
-  </script>
-</head>
-<body onload="detectDevice()">
-  <header>
-    <h1>vault</h1>
-  </header>
-  <section>
-    <p>app</p>
-  </section>
-  <footer>
-    <p>2023</p>
-  </footer>
-</body>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>vault-download-page</title>
+    <script type="module" crossorigin src="/assets/index-b2b911dc.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>vault</h1>
+      </header>
+      <section>
+        <p>app</p>
+      </section>
+      <footer>
+        <p>2023</p>
+      </footer>
+    </div>
+    
+  </body>
 </html>
