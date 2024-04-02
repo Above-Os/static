@@ -897,7 +897,7 @@ restore_k8s_os() {
     local include_status_rgs="applicationpermissions.sys.bytetrade.io,providerregistries.sys.bytetrade.io"
     include_status_rgs+=",applications.app.bytetrade.io,terminus.sys.bytetrade.io,middlewarerequests.apr.bytetrade.io"
     include_status_rgs+=",pgclusterbackups.apr.bytetrade.io,pgclusterrestores.apr.bytetrade.io,perconaservermongodbbackups.psmdb.percona.com"
-    include_status_rgs+=",perconaservermongodbrestores.psmdb.percona.com,redisclusterbackups.redis.kun,distributedredisclusters.redis.kun"
+    include_status_rgs+=",redisclusterbackups.redis.kun,distributedredisclusters.redis.kun"
 
     log_info 'Creating k8s restore task ...'
     ensure_success $sh_c "${VELERO} -n os-system restore create --status-include-resources $include_status_rgs --status-exclude-resources perconaservermongodbs.psmdb.percona.com --from-backup $backupName"
