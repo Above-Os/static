@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# version: 0.1.0
 
 
 ERR_EXIT=1
@@ -1722,8 +1723,8 @@ restore_terminus() {
     log_info 'Waiting for vault ready ...'
     check_vault
 
-    log_info 'Waiting for mongo ready ...'
-    check_mongos
+    # log_info 'Waiting for mongo ready ...'
+    # check_mongos
 
     log_info 'Waiting for desktop ready ...'
     check_desktop
