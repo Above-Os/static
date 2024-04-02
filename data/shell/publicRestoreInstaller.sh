@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# version: 0.1.0
+# version: 0.1.1
 
 
 ERR_EXIT=1
@@ -1095,8 +1095,12 @@ get_vault_status(){
     $sh_c "${KUBECTL} get pod -A -l 'app=vault' -o jsonpath='{.items[0].status.phase}'"
 }
 
+get_settings_status(){
+    $sh_c "${KUBECTL} get pod -A -l 'app=settings' -o jsonpath='{.items[0].status.phase}'"
+}
+
 check_desktop(){
-    status=$(check_together get_profile_status get_auth_status get_desktop_status)
+    status=$(check_together get_profile_status get_auth_status get_desktop_status get_settings_status)
     n=0
     while [ "x${status}" != "xRunning" ]; do
         n=$(expr $n + 1)
@@ -1106,7 +1110,7 @@ check_desktop(){
         echo -ne "\rPlease waiting ${dot}"
         sleep 0.5
 
-        status=$(check_together get_profile_status get_auth_status get_desktop_status)
+        status=$(check_together get_profile_status get_auth_status get_desktop_status get_settings_status)
         echo -ne "\rPlease waiting          "
     done
     echo
@@ -1723,11 +1727,11 @@ restore_terminus() {
     log_info 'Waiting for vault ready ...'
     check_vault
 
-    # log_info 'Waiting for mongo ready ...'
-    # check_mongos
-
     log_info 'Waiting for desktop ready ...'
     check_desktop
+
+    log_info 'Waiting for mongo ready ...'
+    check_mongos
 }
 
 INSTALL_DIR=/tmp/install_log
