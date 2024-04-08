@@ -13,8 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# version: 0.1.1
-
+# version: 0.1.2
 
 ERR_EXIT=1
 ERR_VALIDATION=2
@@ -897,8 +896,9 @@ restore_k8s_os() {
 
     local include_status_rgs="applicationpermissions.sys.bytetrade.io,providerregistries.sys.bytetrade.io"
     include_status_rgs+=",applications.app.bytetrade.io,terminus.sys.bytetrade.io,middlewarerequests.apr.bytetrade.io"
-    include_status_rgs+=",pgclusterbackups.apr.bytetrade.io,pgclusterrestores.apr.bytetrade.io,perconaservermongodbbackups.psmdb.percona.com"
+    include_status_rgs+=",pgclusterbackups.apr.bytetrade.io,pgclusterrestores.apr.bytetrade.io"
     include_status_rgs+=",redisclusterbackups.redis.kun,distributedredisclusters.redis.kun"
+    include_status_rgs+=",perconaservermongodbbackups.psmdb.percona.com"
 
     log_info 'Creating k8s restore task ...'
     ensure_success $sh_c "${VELERO} -n os-system restore create --status-include-resources $include_status_rgs --status-exclude-resources perconaservermongodbs.psmdb.percona.com --from-backup $backupName"
@@ -1133,6 +1133,168 @@ check_bfl(){
     echo
 }
 
+init_mongo_crds(){
+    local crdmongoclusterfile crdmongorestorefile mfe mfr
+    crdmongoclusterfile="crd_mongo_cluster.yaml"
+    crdmongorestorefile="crd_mongo_restore.yaml"
+    mfe="${INSTALL_DIR}/${crdmongoclusterfile}"
+    mfr="${INSTALL_DIR}/${crdmongorestorefile}"
+
+    cat > "${mfr}" <<_END
+apiVersion: psmdb.percona.com/v1
+kind: PerconaServerMongoDBRestore
+metadata:
+  name: mongocluster-restore
+  namespace: os-system
+spec:
+  backupName: mongocluster-backup
+  clusterName: mongo-cluster
+_END
+
+    cat > "${mfe}" <<_END
+apiVersion: psmdb.percona.com/v1
+kind: PerconaServerMongoDB
+metadata:
+  annotations:
+    meta.helm.sh/release-name: system
+    meta.helm.sh/release-namespace: os-system
+  creationTimestamp: "2024-04-02T16:29:08Z"
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: mongo-cluster
+  namespace: os-system
+spec:
+  allowUnsafeConfigurations: true
+  backup:
+    containerSecurityContext:
+      privileged: true
+      runAsUser: 1001
+    enabled: true
+    image: eball/percona-server-mongodb-operator:backup
+    podSecurityContext:
+      fsGroup: 1001
+    serviceAccountName: percona-server-mongodb-operator
+    storages:
+      s3-local:
+        s3:
+          bucket: mongo-backup
+          credentialsSecret: mongo-cluster-backup-fakes3
+          endpointUrl: http://tapr-s3-svc.os-system:4568
+          insecureSkipTLSVerify: false
+          maxUploadParts: 10000
+          prefix: ""
+          storageClass: STANDARD
+          uploadPartSize: 10485760
+        type: s3
+  crVersion: 1.15.0
+  image: percona/percona-server-mongodb:6.0.4-3
+  imagePullPolicy: IfNotPresent
+  initContainerSecurityContext:
+    privileged: true
+    runAsUser: 1001
+  replsets:
+  - containerSecurityContext:
+      privileged: true
+      runAsUser: 1001
+    livenessProbe:
+      exec:
+        command:
+        - /opt/percona/mongodb-healthcheck
+        - k8s
+        - liveness
+        - --startupDelaySeconds
+        - "7200"
+      failureThreshold: 4
+      initialDelaySeconds: 60
+      periodSeconds: 30
+      successThreshold: 1
+      timeoutSeconds: 10
+    name: rs0
+    podSecurityContext:
+      fsGroup: 1001
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1G
+      requests:
+        cpu: 30m
+        memory: 0.5G
+    size: 1
+    volumeSpec:
+      hostPath:
+        path: /terminus/userdata/dbdata/mdbdata
+        type: Directory
+  secrets:
+    users: mdb-cluster-name-secrets
+  sharding:
+    configsvrReplSet:
+      containerSecurityContext:
+        privileged: true
+        runAsUser: 1001
+      livenessProbe:
+        exec:
+          command:
+          - /opt/percona/mongodb-healthcheck
+          - k8s
+          - liveness
+          - --startupDelaySeconds
+          - "7200"
+        failureThreshold: 4
+        initialDelaySeconds: 60
+        periodSeconds: 30
+        successThreshold: 1
+        timeoutSeconds: 10
+      podSecurityContext:
+        fsGroup: 1001
+      resources:
+        limits:
+          cpu: 300m
+          memory: 1G
+        requests:
+          cpu: 30m
+          memory: 0.5G
+      size: 1
+      volumeSpec:
+        hostPath:
+          path: /terminus/userdata/dbdata/mdbdata-config
+          type: Directory
+    enabled: true
+    mongos:
+      livenessProbe:
+        exec:
+          command:
+          - /opt/percona/mongodb-healthcheck
+          - k8s
+          - liveness
+          - --component
+          - mongos
+          - --startupDelaySeconds
+          - "10"
+        failureThreshold: 4
+        initialDelaySeconds: 60
+        periodSeconds: 30
+        successThreshold: 1
+        timeoutSeconds: 10
+      readinessProbe:
+        exec:
+          command:
+          - /opt/percona/mongodb-healthcheck
+          - k8s
+          - readiness
+          - --component
+          - mongos
+        failureThreshold: 3
+        initialDelaySeconds: 10
+        periodSeconds: 1
+        successThreshold: 1
+        timeoutSeconds: 1
+      size: 1
+  upgradeOptions:
+    apply: disabled
+    schedule: 0 2 * * *
+_END
+}
+
 check_mongos(){
     local crdmongoclusterfile crdmongorestorefile mfe mfr delay restoreerr n
     crdmongoclusterfile="crd_mongo_cluster.yaml"
@@ -1143,20 +1305,6 @@ check_mongos(){
     delay=2
     restoreerr=""
 
-    cat > "${mfr}" <<_END
-apiVersion: psmdb.percona.com/v1
-kind: PerconaServerMongoDBRestore
-metadata:
-  generation: 1
-  name: mongocluster-restore
-  namespace: os-system
-  resourceVersion: "13907"
-  uid: 405ca6a4-9fd0-43b7-b0a3-b5be28964f13
-spec:
-  backupName: mongocluster-backup
-  clusterName: mongo-cluster
-_END
-
     delrestore="${KUBECTL} delete perconaservermongodbrestores.psmdb.percona.com mongocluster-restore -n os-system"
     delmongos="${KUBECTL} delete perconaservermongodbs.psmdb.percona.com -n os-system mongo-cluster"
     createrestore="${KUBECTL} apply -f ${mfr}"
@@ -1165,17 +1313,15 @@ _END
     mstate=$(_get_mongo_cluster_state) # ! add state: unknown 
     rstate=$(_get_mongo_restore_state)
 
-    if [ -n "$mstate" ] && [ ! -f ${mfe} ]; then
-        $sh_c "${KUBECTL} get perconaservermongodbs.psmdb.percona.com -n os-system mongo-cluster -o yaml > ${mfe}"
-    fi
-
     echo "Mongo restore status checking ... "
 
+    rbc="0"
     first="1"
     done="0"
     n=0
     while [ x"$done" != x"1" ]; do
         sleep $delay
+        bstate=$(_get_mongo_backup_state)
         mstate=$(_get_mongo_cluster_state)
         mtimeout=$(_get_mongo_cluster_timeout)
         mep=$(_get_mongo_cluster_endpoint)
@@ -1192,29 +1338,29 @@ _END
             break
         fi
 
-        if [ -z "$rstate" ] && [ x"$mstate" == x"unknown" ] && [ x"$first" == x"1" ] && [ "$mtimeout" -gt 30 ]; then
-            $sh_c "$delmongos"
-            echo "cluster timeout, retry ..."
-            first="0"
-            continue
-        fi
+        # if [ -z "$rstate" ] && [ x"$mstate" == x"unknown" ] && [ x"$first" == x"1" ] && [ "$mtimeout" -gt 30 ]; then
+        #     $sh_c "$delmongos"
+        #     echo "cluster timeout, retry ..."
+        #     first="0"
+        #     continue
+        # fi
 
-        if ([ x"$rstate" != x"ready" ] && [ "$rtimeout" -gt 6 ]) || ([ x"$first" == x"0" ] && [ -z "$rstate" ] && [ -n "$mstate" ] && [ x"$mstate" != x"ready" ] && [ "$mtimeout" -gt 8 ]); then
-            $sh_c "$delrestore"
-            sleep 0.5
-            $sh_c "$delmongos"
-            echo "restore error ${rstate}.${rtimeout}, retry ... "
-            first="0"
-            continue
-        fi
+        # if ([ x"$rstate" != x"ready" ] && [ "$rtimeout" -gt 6 ]) || ([ x"$first" == x"0" ] && [ -z "$rstate" ] && [ -n "$mstate" ] && [ x"$mstate" != x"ready" ] && [ "$mtimeout" -gt 8 ]); then
+        #     $sh_c "$delrestore"
+        #     sleep 0.5
+        #     $sh_c "$delmongos"
+        #     echo "restore error ${rstate}.${rtimeout}, retry ... "
+        #     first="0"
+        #     continue
+        # fi
 
-        if [ -z "$mstate" ]; then
-            $sh_c "$createmongos"
-            first="0"
-            continue
-        fi
+        # if [ -z "$mstate" ]; then
+        #     $sh_c "$createmongos"
+        #     first="0"
+        #     continue
+        # fi
 
-        if [ -z "$rstate" ]; then
+        if [ -z "$rstate" ] && [ x"$bstate" == x"ready" ]; then
             if [ -n "$mstate" ] && ([ x"$mstate" != x"ready" ] || [ -z "$mep" ]); then
                 echo "restore ${rstate}, please waiting ..."
                 continue
@@ -1225,14 +1371,14 @@ _END
             continue
         fi
 
-        if [ x"$rstate" == x"error" ] && [ "$rtimeout" -gt 2 ] && [ x"$mstate" == x"initializing" ] && [ "$mtimeout" -gt 3 ]; then
-            $sh_c "$delrestore"
-            sleep 0.5
-            $sh_c "$delmongos"
-            echo "restore error ${mstate}.${mtimeout} ${rstate}.${rtimeout}, retry ... "
-            first="0"
-            continue
-        fi
+        # if [ x"$rstate" == x"error" ] && [ "$rtimeout" -gt 2 ] && [ x"$mstate" == x"initializing" ] && [ "$mtimeout" -gt 3 ]; then
+        #     $sh_c "$delrestore"
+        #     sleep 0.5
+        #     $sh_c "$delmongos"
+        #     echo "restore error ${mstate}.${mtimeout} ${rstate}.${rtimeout}, retry ... "
+        #     first="0"
+        #     continue
+        # fi
 
         echo "restore ${rstate}.${rtimeout}, please waiting ..."
     done
@@ -1247,21 +1393,13 @@ _END
 
 _get_mongo_restore_state(){
     sleep 0.5
-    local st age status
-    status=$($sh_c "${KUBECTL} get perconaservermongodbrestores.psmdb.percona.com -n os-system mongocluster-restore --no-headers" 2>/dev/null)
+    local state
+    state=$($sh_c "${KUBECTL} get perconaservermongodbrestores.psmdb.percona.com -n os-system mongocluster-restore -o jsonpath='{.status.state}'" 2>/dev/null)
     if [ $? -ne 0 ]; then
         echo ""
         return
     fi
-
-    echo "$status" | while IFS= read line; do
-        st=$(echo "$line" |awk '{print $3}')
-        age=$(echo "$line" |awk '{print $4}')
-        if [ -z "$age" ] && [ -n "$st" ]; then
-            st="none"
-        fi
-        echo $st
-    done
+    echo "$state" || "none"
 }
 
 _get_mongo_restore_timeout(){
@@ -1319,47 +1457,37 @@ _get_mongo_cluster_timeout(){
     done
 }
 
-_get_mongo_cluster_state(){
-    sleep 0.5
-    local name ep st to status
-    status=$($sh_c "${KUBECTL} get perconaservermongodbs.psmdb.percona.com -n os-system mongo-cluster --no-headers" 2>/dev/null)
+_get_mongo_backup_state(){
+    local state
+    state=$($sh_c "${KUBECTL} get perconaservermongodbbackups.psmdb.percona.com -n os-system mongocluster-backup -o jsonpath='{.status.state}'" 2>/dev/null)
     if [ $? -ne 0 ]; then
         echo ""
         return
     fi
+    echo "$state"
+}
 
-    echo "$status" | while IFS= read line; do
-        name=$(echo "$line" |awk '{print $1}')
-        ep=$(echo "$line" |awk '{print $2}')
-        st=$(echo "$line" |awk '{print $3}')
-        to=$(echo "$line" |awk '{print $4}')
-        if [ -n x"$name" ] && [ x"$ep" != x"mongo-cluster-mongos.os-system.svc.cluster.local" ]; then
-            if [ -z "$st" ]; then
-                st="unknown"
-            else
-                st="$ep"
-            fi
-        fi
-        echo "$st"
-    done
+
+_get_mongo_cluster_state(){
+    sleep 0.5
+    local state
+    state=$($sh_c "${KUBECTL} get perconaservermongodbs.psmdb.percona.com -n os-system mongo-cluster -o jsonpath='{.status.state}'" 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        echo ""
+        return
+    fi
+    echo "$state" || "unknown"
 }
 
 _get_mongo_cluster_endpoint(){
     sleep 0.5
-    local ep status
-    status=$($sh_c "${KUBECTL} get perconaservermongodbs.psmdb.percona.com -n os-system mongo-cluster --no-headers" 2>/dev/null)
+    local state
+    state=$($sh_c "${KUBECTL} get perconaservermongodbs.psmdb.percona.com -n os-system mongo-cluster -o jsonpath='{.status.host}'" 2>/dev/null)
     if [ $? -ne 0 ]; then
         echo ""
         return
     fi
-
-    echo "$status" | while IFS= read line; do
-        ep=$(echo "$line" |awk '{print $2}')
-        if [ x"$ep" != x"mongo-cluster-mongos.os-system.svc.cluster.local" ]; then
-            ep=""
-        fi
-        echo "$ep"
-    done
+    echo "$state" || ""
 }
 
 check_vault(){
@@ -1547,7 +1675,7 @@ restore_osdata() {
 
     log_info 'installing restic ...'
     ensure_success $sh_c "curl ${CURL_TRY} -k -sfLO https://github.com/restic/restic/releases/download/v${RESTIC_VERSION}/restic_${RESTIC_VERSION}_linux_amd64.bz2"
-    ensure_success $sh_c "bunzip2 restic_${RESTIC_VERSION}_linux_amd64.bz2"
+    ensure_success $sh_c "bunzip2 --force restic_${RESTIC_VERSION}_linux_amd64.bz2"
     ensure_success $sh_c "install restic_${RESTIC_VERSION}_linux_amd64 /usr/local/bin/restic"
 
     log_info "restoring osdata to ${rootfs}/"
@@ -1731,6 +1859,7 @@ restore_terminus() {
     check_desktop
 
     log_info 'Waiting for mongo ready ...'
+    init_mongo_crds
     check_mongos
 }
 
