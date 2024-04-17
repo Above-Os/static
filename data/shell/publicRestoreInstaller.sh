@@ -1702,8 +1702,8 @@ install_k8s() {
 
     log_info 'Downloading kke installer ...'
     if [ x"$PROXY" != x"" ]; then
-      if [ -f "/home/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz" ]; then
-          ensure_success $sh_c "cp /home/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz /tmp/install_log"
+      if [ -f "${HOME}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz" ]; then
+          ensure_success $sh_c "cp ${HOME}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz ${INSTALL_DIR}"
       else
           ensure_success $sh_c "curl ${CURL_TRY} -k -sfLO https://github.com/eball/kubekey-ext/releases/download/${KKE_VERSION}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
       fi
