@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-
-
-
 ERR_EXIT=1
 ERR_VALIDATION=2
 
@@ -20,7 +17,7 @@ check_backup_password() {
 
     if [ x"$backupPassword" == x"" ]; then
         while :; do
-            read_tty "Enter the recovery password: " backupPassword
+            read_tty "Enter the backup password: " backupPassword
             if ! validate_backuppwd; then
                 continue
             fi
@@ -34,7 +31,7 @@ validate_backuppwd() {
     match=$(echo $backupPassword |egrep -o '^.{3,20}$')
 
     if [ x"$match" != x"$backupPassword" ]; then
-        printf "illegal recovery password '$backupPassword', try again\n\n"
+        printf "illegal backup password '$backupPassword', try again\n\n"
         return 1
     fi
     return 0
@@ -337,16 +334,11 @@ WorkingDirectory=/usr/local
 
 User=minio
 Group=minio
-ProtectProc=invisible
+#ProtectProc=invisible
 
 EnvironmentFile=-/etc/default/minio
-ExecStartPre=/bin/bash -c "if [ -z \"\${MINIO_VOLUMES}\" ]; then echo \"Variable MINIO_VOLUMES not set in /etc/default/minio\"; exit 1; fi"
-ExecStart=$minio_bin server \$MINIO_OPTS \$MINIO_VOLUMES
-
-# MinIO RELEASE.2023-05-04T21-44-30Z adds support for Type=notify (https://www.freedesktop.org/software/systemd/man/systemd.service.html#Type=)
-# This may improve systemctl setups where other services use After=minio.server
-# Uncomment the line to enable the functionality
-# Type=notify
+ExecStartPre=
+ExecStart=$minio_bin server --console-address ${local_ip}:9090 --address ${local_ip}:9000 $minio_data
 
 # Let systemd restart this service always
 Restart=always
@@ -363,7 +355,6 @@ SendSIGKILL=no
 
 [Install]
 WantedBy=multi-user.target
-
 _END
 
         ensure_success $sh_c "cat ${INSTALL_DIR}/minio.service > /etc/systemd/system/minio.service"
@@ -372,8 +363,6 @@ _END
 # This user has unrestricted permissions to perform S3 and administrative API operations on any resource in the deployment.
 # Omit to use the default values 'minioadmin:minioadmin'.
 # MinIO recommends setting non-default values as a best practice, regardless of environment
-MINIO_VOLUMES="$minio_data"
-MINIO_OPTS="--console-address ${local_ip}:9090 --address ${local_ip}:9000"
 
 MINIO_ROOT_USER=$MINIO_ROOT_USER
 MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD
@@ -408,29 +397,6 @@ _END
 
     # minio password from file
     MINIO_ROOT_PASSWORD=$(awk -F '=' '/^MINIO_ROOT_PASSWORD/{print $2}' /etc/default/minio)
-    MINIO_VOLUMES=$minio_data
-}
-
-init_minio_cluster(){
-    # to be enabled
-    return 
-
-    MINIO_OPERATOR_VERSION="v0.0.1"
-    if [[ ! -f /etc/ssl/etcd/ssl/ca.pem || ! -f /etc/ssl/etcd/ssl/node-$HOSTNAME-key.pem || ! -f /etc/ssl/etcd/ssl/node-$HOSTNAME.pem ]]; then
-        echo "cann't find etcd key files"
-        exit $ERR_EXIT
-    fi
-
-    local minio_operator_bin="/usr/local/bin/minio-operator"
-
-    if [ ! -f "$minio_operator_bin" ]; then
-        # TODO: mini-operator public repo
-        ensure_success $sh_c "curl ${CURL_TRY} -k -sfLO https://github.com/Above-Os/minio-operator/releases/download/${MINIO_OPERATOR_VERSION}/minio-operator-${MINIO_OPERATOR_VERSION}-linux-amd64.tar.gz"
-	    ensure_success $sh_c "tar zxf minio-operator-${MINIO_OPERATOR_VERSION}-linux-amd64.tar.gz"
-        ensure_success $sh_c "install -m 755 minio-operator $minio_operator_bin"
-    fi
-
-    ensure_success $sh_c "$minio_operator_bin init --address $local_ip --cafile /etc/ssl/etcd/ssl/ca.pem --certfile /etc/ssl/etcd/ssl/node-$HOSTNAME.pem --keyfile /etc/ssl/etcd/ssl/node-$HOSTNAME-key.pem --volume $MINIO_VOLUMES --password $MINIO_ROOT_PASSWORD"
 }
 
 install_redis() {
@@ -834,8 +800,8 @@ run_install() {
 }
 
 install_velero() {
-  VELERO_IMAGE="aboveos/velero:v1.11.1"
-  ensure_success $sh_c "${VELERO} install --image '${VELERO_IMAGE}' --crds-only"
+  VELERO_IMAGE="beclab/velero:v1.11.1"
+  ensure_success $sh_c "${VELERO} install --image ${VELERO_IMAGE} --crds-only"
 }
 
 install_velero_plugin_terminus() {
@@ -846,7 +812,7 @@ install_velero_plugin_terminus() {
   namespace="os-system"
   storage_location="terminus-cloud"
   bucket="terminus-cloud"
-  plugin="aboveos/velero-plugin-for-terminus:v1.0.1"
+  plugin="beclab/velero-plugin-for-terminus:v1.0.1"
 
   if [[ "$provider" == x"" || "$namespace" == x"" || "$bucket" == x"" || "$plugin" == x"" ]]; then
     echo "velero plugin install params invalid."
@@ -919,7 +885,7 @@ restore_k8s_os() {
     include_status_rgs+=",redisclusterbackups.redis.kun,distributedredisclusters.redis.kun"
 
     log_info 'Creating k8s restore task ...'
-    ensure_success $sh_c "${VELERO} -n os-system restore create --status-include-resources $include_status_rgs --status-exclude-resources perconaservermongodbs.psmdb.percona.com --selector 'managered-by notin (mongo-backup-mongo-cluster)' --from-backup $backupName"
+    ensure_success $sh_c "${VELERO} -n os-system restore create --status-include-resources $include_status_rgs --status-exclude-resources perconaservermongodbs.psmdb.percona.com --selector 'managered-by notin (mongo-backup-mongo-cluster,mongo-restore-mongo-cluster)' --from-backup $backupName"
 
     check_restore_available
 }
@@ -1160,129 +1126,175 @@ init_mongo_crds(){
     fi
 }
 
-check_mongos(){
-    local crdmongoclusterfile crdmongorestorefile mfe mfr delay restoreerr n
-    crdmongoclusterfile="crd_mongo_cluster.yaml"
-    crdmongorestorefile="crd_mongo_restore.yaml"
-    mfe="${INSTALL_DIR}/${crdmongoclusterfile}"
-    mfr="${INSTALL_DIR}/${crdmongorestorefile}"
+restore_mongo(){
+    local pbmName pbmNamePattern restorePattern rsstate cfgstate
+    pbmNamePattern="${KUBECTL} get backupconfigs.sys.bytetrade.io -n os-system -l backup.bytetrade.io/backup-fullname='${TERMINUS_BACKUP_NAME}' -o jsonpath='{.items[].metadata.annotations.percona/psmdb-last-backup-pbmname}'"
+    pbmName=$($sh_c "$pbmNamePattern")
+    if [  -z "$pbmName" ]; then
+        echo "restore mongodb skip ..."
+        return
+    fi
 
-    delay=2
-    restoreerr=""
+    echo "preparing for restore mongo backup ${pbmName} ..."
 
-    delrestore="${KUBECTL} delete perconaservermongodbrestores.psmdb.percona.com mongocluster-restore -n os-system"
-    delmongos="${KUBECTL} delete perconaservermongodbs.psmdb.percona.com -n os-system mongo-cluster"
-    createrestore="${KUBECTL} apply -f ${mfr}"
-    createmongos="${KUBECTL} apply -f ${mfe}"
+    restorePattern='{"apiVersion":"psmdb.percona.com/v1","kind":"PerconaServerMongoDBRestore","metadata":{"labels": {"managered-by": "mongo-restore-mongo-cluster"},"name":"mongocluster-restore","namespace":"os-system"},"spec":{"backupSource":{"destination":"s3://mongo-backup/'"${pbmName}"'","pbmName":"'"${pbmName}"'","s3":{"bucket":"mongo-backup","credentialsSecret":"mongo-cluster-backup-fakes3","endpointUrl":"http://tapr-s3-svc.os-system:4568","insecureSkipTLSVerify":false,"maxUploadParts":10000,"prefix":"","storageClass":"STANDARD","uploadPartSize":10485760},"type":"physical"},"clusterName":"mongo-cluster","storageName":"s3-local"}}'
 
-    mstate=$(_get_mongo_cluster_state) # ! add state: unknown 
-    rstate=$(_get_mongo_restore_state)
+    echo "${restorePattern}" > "${INSTALL_DIR}/restore.yaml"
 
-    echo "Mongo restore status checking ... "
-
-    rbc="0"
-    first="1"
+    mstate=$(_get_mongo_cluster_state)
+    rsstate=$(_get_sts_mongo_rs_state)
+    cfgstate=$(_get_sts_mongo_cfg_state)
     done="0"
-    n=0
+    first="1"
     while [ x"$done" != x"1" ]; do
-        sleep $delay
-        bstate=$(_get_mongo_backup_state)
         mstate=$(_get_mongo_cluster_state)
-        mtimeout=$(_get_mongo_cluster_timeout)
-        mep=$(_get_mongo_cluster_endpoint)
         rstate=$(_get_mongo_restore_state)
-        rtimeout=$(_get_mongo_restore_timeout)
+        if [ x"$first" == x"1" ]; then
+            rsstate=$(_get_sts_mongo_rs_state)
+            cfgstate=$(_get_sts_mongo_cfg_state)
+        fi
 
         if [ x"$mstate" == x"ready" ] && [ x"$rstate" == x"ready" ]; then
             done="1"
             break
         fi
 
-        # +
-        if [ x"$mstate" == x"ready" ] && [ x"$rbc" == x"0" ]; then
-            local backupName=$($sh_c "echo $TERMINUS_BACKUP_NAME | rev | cut -d'-' -f2- | rev")
-            ensure_success $sh_c "${VELERO} -n os-system restore create --status-include-resources perconaservermongodbbackups.psmdb.percona.com --selector managered-by=mongo-backup-mongo-cluster --from-backup $backupName"
-            rbc="1"
-            sleep 0.5
-            continue
-        fi
-
-        if [ x"$rstate" == x"none" ] && [ "$rtimeout" -gt 4 ]; then
-            restoreerr="Mongo restore failed, backup not found, please RESTORE AGAIN."
-            break
-        fi
-
-        if [ -z "$rstate" ] && [ x"$mstate" == x"unknown" ] && [ x"$first" == x"1" ] && [ "$mtimeout" -gt 30 ]; then
-            $sh_c "$delmongos"
-            echo "cluster timeout, retry ..."
-            first="0"
-            continue
-        fi
-
-        if ([ x"$rstate" != x"ready" ] && [ "$rtimeout" -gt 6 ]) || ([ x"$first" == x"0" ] && [ -z "$rstate" ] && [ -n "$mstate" ] && [ x"$mstate" != x"ready" ] && [ "$mtimeout" -gt 8 ]); then
-            $sh_c "$delrestore"
-            sleep 0.5
-            $sh_c "$delmongos"
-            echo "restore error ${rstate}.${rtimeout}, retry ... "
-            first="0"
-            continue
-        fi
-
-        if [ -z "$mstate" ]; then
-            $sh_c "$createmongos"
-            first="0"
-            continue
-        fi
-
-        if [ -z "$rstate" ] && [ x"$bstate" == x"ready" ]; then
-            if [ -n "$mstate" ] && ([ x"$mstate" != x"ready" ] || [ -z "$mep" ]); then
-                echo "restore ${rstate}, please waiting ..."
+        if [ x"$mstate" == x"ready" ] && [ -z "$rstate" ] && [ x"$first" == x"1" ]; then
+            if [ -z "$rsstate" ] || [ -z "$cfgstate" ]; then
+                sleep 10
                 continue
             fi
-
-            $sh_c "$createrestore"
+            sleep 8
+            $sh_c "${KUBECTL} apply -f ${INSTALL_DIR}/restore.yaml"
             first="0"
+            rsstate=""
+            cfgstate=""
             continue
         fi
-
-        if [ x"$rstate" == x"error" ] && [ "$rtimeout" -gt 2 ] && [ x"$mstate" == x"initializing" ] && [ "$mtimeout" -gt 3 ]; then
-            $sh_c "$delrestore"
-            sleep 0.5
-            $sh_c "$delmongos"
-            echo "restore error ${mstate}.${mtimeout} ${rstate}.${rtimeout}, retry ... "
-            first="0"
-            continue
+        if [ -n "$rstate" ]; then
+            echo "restore state ${rstate}, please waiting ..."
         fi
-
-        echo "restore ${rstate}.${rtimeout}, please waiting ..."
+        sleep 20
     done
+}
 
-    echo
-    if [ -z "$restoreerr" ]; then
-        echo "$restoreerr"
-    else
-        echo "Mongo restore succeed ..."
-    fi
+# check_mongos(){
+#     local mfe delay restoreerr n
+#     mfe="${INSTALL_DIR}/crd_mongo_cluster.yaml"
+
+#     delay=2
+#     restoreerr=""
+
+#     delrestore="${KUBECTL} delete perconaservermongodbrestores.psmdb.percona.com mongocluster-restore -n os-system"
+#     delmongos="${KUBECTL} delete perconaservermongodbs.psmdb.percona.com -n os-system mongo-cluster"
+#     createrestore="${KUBECTL} apply -f ${mfr}"
+#     createmongos="${KUBECTL} apply -f ${mfe}"
+
+#     mstate=$(_get_mongo_cluster_state)
+#     rstate=$(_get_mongo_restore_state)
+
+#     echo "Mongo restore status checking ... "
+
+#     rbc="0"
+#     first="1"
+#     done="0"
+#     n=0
+#     while [ x"$done" != x"1" ]; do
+#         sleep $delay
+#         bstate=$(_get_mongo_backup_state)
+#         mstate=$(_get_mongo_cluster_state)
+#         mtimeout=$(_get_mongo_cluster_timeout)
+#         mep=$(_get_mongo_cluster_endpoint)
+#         rstate=$(_get_mongo_restore_state)
+#         rtimeout=$(_get_mongo_restore_timeout)
+
+#         if [ x"$mstate" == x"ready" ] && [ x"$rstate" == x"ready" ]; then
+#             done="1"
+#             break
+#         fi
+
+#         if [ x"$rstate" == x"none" ] && [ "$rtimeout" -gt 4 ]; then
+#             restoreerr="Mongo restore failed, backup not found, please RESTORE AGAIN."
+#             break
+#         fi
+
+#         # if [ -z "$rstate" ] && [ x"$mstate" == x"unknown" ] && [ x"$first" == x"1" ] && [ "$mtimeout" -gt 30 ]; then
+#         #     $sh_c "$delmongos"
+#         #     echo "cluster timeout, retry ..."
+#         #     first="0"
+#         #     continue
+#         # fi
+
+#         # if ([ x"$rstate" != x"ready" ] && [ "$rtimeout" -gt 6 ]) || ([ x"$first" == x"0" ] && [ -z "$rstate" ] && [ -n "$mstate" ] && [ x"$mstate" != x"ready" ] && [ "$mtimeout" -gt 8 ]); then
+#         #     $sh_c "$delrestore"
+#         #     sleep 0.5
+#         #     $sh_c "$delmongos"
+#         #     echo "restore error ${rstate}.${rtimeout}, retry ... "
+#         #     first="0"
+#         #     continue
+#         # fi
+
+#         # if [ -z "$mstate" ]; then
+#         #     $sh_c "$createmongos"
+#         #     first="0"
+#         #     continue
+#         # fi
+
+#         if [ -z "$rstate" ] && [ x"$bstate" == x"ready" ]; then
+#             if [ -n "$mstate" ] && ([ x"$mstate" != x"ready" ] || [ -z "$mep" ]); then
+#                 echo "restore ${rstate}, please waiting ..."
+#                 continue
+#             fi
+
+#             $sh_c "$createrestore"
+#             first="0"
+#             continue
+#         fi
+
+#         # if [ x"$rstate" == x"error" ] && [ "$rtimeout" -gt 2 ] && [ x"$mstate" == x"initializing" ] && [ "$mtimeout" -gt 3 ]; then
+#         #     $sh_c "$delrestore"
+#         #     sleep 0.5
+#         #     $sh_c "$delmongos"
+#         #     echo "restore error ${mstate}.${mtimeout} ${rstate}.${rtimeout}, retry ... "
+#         #     first="0"
+#         #     continue
+#         # fi
+
+#         echo "restore ${rstate}.${rtimeout}, please waiting ..."
+#     done
+
+#     echo
+#     if [ -z "$restoreerr" ]; then
+#         echo "$restoreerr"
+#     else
+#         echo "Mongo restore succeed ..."
+#     fi
+# }
+
+_get_sts_mongo_rs_state(){
+  local query="${KUBECTL} logs mongo-cluster-rs0-0 -n os-system -c backup-agent |grep 'listening for the commands'"
+  local state=$($sh_c "${query}" 2>/dev/null)
+  if [ $? -ne 0 ]; then
+      echo ""
+      return
+  fi
+
+  echo "$state"
+}
+
+_get_sts_mongo_cfg_state(){
+  local query="${KUBECTL} logs mongo-cluster-cfg-0 -n os-system -c backup-agent |grep 'listening for the commands'"
+  local state=$($sh_c "${query}" 2>/dev/null)
+  if [ $? -ne 0 ]; then
+      echo ""
+      return
+  fi
+
+  echo "$state"
 }
 
 _get_mongo_restore_state(){
     sleep 0.5
-    # local st age status
-    # status=$($sh_c "${KUBECTL} get perconaservermongodbrestores.psmdb.percona.com -n os-system mongocluster-restore --no-headers" 2>/dev/null)
-    # if [ $? -ne 0 ]; then
-    #     echo ""
-    #     return
-    # fi
-
-    # echo "$status" | while IFS= read line; do
-    #     st=$(echo "$line" |awk '{print $3}')
-    #     age=$(echo "$line" |awk '{print $4}')
-    #     if [ -z "$age" ] && [ -n "$st" ]; then
-    #         st="none"
-    #     fi
-    #     echo $st
-    # done
-
     local state
     state=$($sh_c "${KUBECTL} get perconaservermongodbrestores.psmdb.percona.com -n os-system mongocluster-restore -o jsonpath='{.status.state}'" 2>/dev/null)
     if [ $? -ne 0 ]; then
@@ -1360,28 +1372,6 @@ _get_mongo_backup_state(){
 
 _get_mongo_cluster_state(){
     sleep 0.5
-    # local name ep st to status
-    # status=$($sh_c "${KUBECTL} get perconaservermongodbs.psmdb.percona.com -n os-system mongo-cluster --no-headers" 2>/dev/null)
-    # if [ $? -ne 0 ]; then
-    #     echo ""
-    #     return
-    # fi
-
-    # echo "$status" | while IFS= read line; do
-    #     name=$(echo "$line" |awk '{print $1}')
-    #     ep=$(echo "$line" |awk '{print $2}')
-    #     st=$(echo "$line" |awk '{print $3}')
-    #     to=$(echo "$line" |awk '{print $4}')
-    #     if [ -n x"$name" ] && [ x"$ep" != x"mongo-cluster-mongos.os-system.svc.cluster.local" ]; then
-    #         if [ -z "$st" ]; then
-    #             st="unknown"
-    #         else
-    #             st="$ep"
-    #         fi
-    #     fi
-    #     echo "$st"
-    # done
-
     local state
     state=$($sh_c "${KUBECTL} get perconaservermongodbs.psmdb.percona.com -n os-system mongo-cluster -o jsonpath='{.status.state}'" 2>/dev/null)
     if [ $? -ne 0 ]; then
@@ -1706,13 +1696,17 @@ install_containerd(){
 }
 
 install_k8s() {
-    KKE_VERSION=0.1.17
+    KKE_VERSION=0.1.18
 
     ensure_success $sh_c "mkdir -p /etc/kke"
 
     log_info 'Downloading kke installer ...'
     if [ x"$PROXY" != x"" ]; then
-	    ensure_success $sh_c "curl ${CURL_TRY} -k -sfLO https://github.com/eball/kubekey-ext/releases/download/${KKE_VERSION}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
+      if [ -f "/home/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz" ]; then
+          ensure_success $sh_c "cp /home/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz /tmp/install_log"
+      else
+          ensure_success $sh_c "curl ${CURL_TRY} -k -sfLO https://github.com/eball/kubekey-ext/releases/download/${KKE_VERSION}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
+      fi
 	    ensure_success $sh_c "tar xf kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
     else
     	ensure_success $sh_c "curl ${CURL_TRY} -sfL https://raw.githubusercontent.com/eball/kubekey-ext/master/downloadKKE.sh | VERSION=${KKE_VERSION} bash -"
@@ -1736,11 +1730,6 @@ install_k8s() {
 restore_terminus() {
     log_info 'Installing minimal k8s cluster ...'
     install_k8s
-
-    if [ "$storage_type" == "minio" ]; then
-        # init minio-operator after etcd installed
-        init_minio_cluster
-    fi
 
     log_info 'Installing backup/restore component velero ...'
     ensure_success $sh_c "curl ${CURL_TRY} -k -sfLO https://github.com/vmware-tanzu/velero/releases/download/v1.11.0/velero-v1.11.0-linux-amd64.tar.gz"
@@ -1777,7 +1766,7 @@ restore_terminus() {
 
     log_info 'Waiting for mongo ready ...'
     init_mongo_crds
-    # check_mongos
+    restore_mongo
 }
 
 INSTALL_DIR=/tmp/install_log
