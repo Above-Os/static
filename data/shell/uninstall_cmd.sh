@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+
+
 ERR_EXIT=1
 
 RM=$(command -v rm)
@@ -86,15 +88,16 @@ remove_cluster(){
     log_info 'remove kubernetes cluster'
 
     if [ x"$PROXY" != x"" ]; then
-	    ensure_success $sh_c "cat /etc/resolv.conf > /etc/resolv.conf.bak"
-	    ensure_success $sh_c "echo nameserver $PROXY > /etc/resolv.conf"
-      if [ -f "/home/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz" ]; then
-          ensure_success $sh_c "cp /home/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz /tmp/install_log"
-      else
-          ensure_success $sh_c "curl ${CURL_TRY} -kLO https://github.com/eball/kubekey-ext/releases/download/${KKE_VERSION}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
-      fi
-	    ensure_success $sh_c "tar xf kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
-	    ensure_success $sh_c "cat /etc/resolv.conf.bak > /etc/resolv.conf"
+        ensure_success $sh_c "cat /etc/resolv.conf > /etc/resolv.conf.bak"
+        ensure_success $sh_c "echo nameserver $PROXY > /etc/resolv.conf"
+        # if download failed
+        if [ -f "${HOME}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz" ]; then
+            ensure_success $sh_c "cp ${HOME}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz ${INSTALL_DIR}"
+        else
+            ensure_success $sh_c "curl ${CURL_TRY} -kLO https://github.com/eball/kubekey-ext/releases/download/${KKE_VERSION}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
+        fi
+        ensure_success $sh_c "tar xf kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
+        ensure_success $sh_c "cat /etc/resolv.conf.bak > /etc/resolv.conf"
     else
     	ensure_success $sh_c "curl -sfL https://raw.githubusercontent.com/eball/kubekey-ext/master/downloadKKE.sh | VERSION=${KKE_VERSION} bash -"
     fi
