@@ -409,8 +409,6 @@ _END
 }
 
 init_minio_cluster(){
-    # to be enabled
-    return 
 
     MINIO_OPERATOR_VERSION="v0.0.1"
     if [[ ! -f /etc/ssl/etcd/ssl/ca.pem || ! -f /etc/ssl/etcd/ssl/node-$HOSTNAME-key.pem || ! -f /etc/ssl/etcd/ssl/node-$HOSTNAME.pem ]]; then
@@ -422,7 +420,7 @@ init_minio_cluster(){
 
     if [ ! -f "$minio_operator_bin" ]; then
         # TODO: mini-operator public repo
-        ensure_success $sh_c "curl ${CURL_TRY} -k -sfLO https://github.com/Above-Os/minio-operator/releases/download/${MINIO_OPERATOR_VERSION}/minio-operator-${MINIO_OPERATOR_VERSION}-linux-amd64.tar.gz"
+        ensure_success $sh_c "curl ${CURL_TRY} -k -sfLO https://github.com/beclab/minio-operator/releases/download/${MINIO_OPERATOR_VERSION}/minio-operator-${MINIO_OPERATOR_VERSION}-linux-amd64.tar.gz"
 	    ensure_success $sh_c "tar zxf minio-operator-${MINIO_OPERATOR_VERSION}-linux-amd64.tar.gz"
         ensure_success $sh_c "install -m 755 minio-operator $minio_operator_bin"
     fi
@@ -574,7 +572,7 @@ install_juicefs() {
     [ ! -d $jfs_cachedir ] && ensure_success $sh_c "mkdir -p $jfs_cachedir"
 
     if [ ! -f "$juicefs_bin" ]; then
-        ensure_success $sh_c "curl ${CURL_TRY} -kLO https://github.com/eball/juicefs-ext-public/releases/download/${JFS_VERSION}/juicefs-${JFS_VERSION}-linux-amd64.tar.gz"
+        ensure_success $sh_c "curl ${CURL_TRY} -kLO https://github.com/beclab/juicefs-ext/releases/download/${JFS_VERSION}/juicefs-${JFS_VERSION}-linux-amd64.tar.gz"
         ensure_success $sh_c "tar -zxf juicefs-${JFS_VERSION}-linux-amd64.tar.gz"
         ensure_success $sh_c "chmod +x juicefs"
         ensure_success $sh_c "install juicefs /usr/local/bin"
@@ -1567,11 +1565,11 @@ install_k8s() {
 	    if [ -f "${HOME}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz" ]; then
           ensure_success $sh_c "cp ${HOME}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz ${INSTALL_DIR}"
       else
-          ensure_success $sh_c "curl ${CURL_TRY} -k -sfLO https://github.com/eball/kubekey-ext/releases/download/${KKE_VERSION}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
+          ensure_success $sh_c "curl ${CURL_TRY} -k -sfLO https://github.com/beclab/kubekey-ext/releases/download/${KKE_VERSION}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
       fi
 	    ensure_success $sh_c "tar xf kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
     else
-    	ensure_success $sh_c "curl ${CURL_TRY} -sfL https://raw.githubusercontent.com/eball/kubekey-ext/master/downloadKKE.sh | VERSION=${KKE_VERSION} bash -"
+    	ensure_success $sh_c "curl ${CURL_TRY} -sfL https://raw.githubusercontent.com/beclab/kubekey-ext/master/downloadKKE.sh | VERSION=${KKE_VERSION} bash -"
     fi
     ensure_success $sh_c "chmod +x kk"
 
