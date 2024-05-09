@@ -85,6 +85,8 @@ remove_cluster(){
         KKE_VERSION="0.1.18"
     fi
 
+    forceUninstall="${FORCE_UNINSTALL_CLUSTER}"
+
     log_info 'remove kubernetes cluster'
 
     if [ x"$PROXY" != x"" ]; then
@@ -103,12 +105,14 @@ remove_cluster(){
     fi
     ensure_success $sh_c "chmod +x kk"
 
-    echo
-    read -r -p "Are you sure to delete this cluster? [yes/no]: " ans </dev/tty
+    if [ -z x"$forceUninstall" ]; then
+        echo
+        read -r -p "Are you sure to delete this cluster? [yes/no]: " ans </dev/tty
 
-    if [ x"$ans" != x"yes" ]; then
-        echo "exiting..."
-        exit
+        if [ x"$ans" != x"yes" ]; then
+            echo "exiting..."
+            exit
+        fi
     fi
     
     $sh_c "./kk delete cluster -A --with-kubernetes $KUBE_VERSION"
@@ -216,6 +220,9 @@ remove_mount() {
 
         log_info 'clean juicefs s3 mount'
         ensure_success $sh_c "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID_SETUP} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY_SETUP} AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN_SETUP} ${AWS} s3 rm $s3/${CLUSTER_ID} --recursive"
+
+        ensure_success $sh_c "umount -l /terminus/rootfs"
+        ensure_success $sh_c "rm -rf /terminus"
     fi
 }
 
