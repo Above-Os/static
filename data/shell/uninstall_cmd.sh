@@ -94,12 +94,12 @@ remove_cluster(){
         if [ -f "${HOME}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz" ]; then
             ensure_success $sh_c "cp ${HOME}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz ${INSTALL_DIR}"
         else
-            ensure_success $sh_c "curl ${CURL_TRY} -kLO https://github.com/eball/kubekey-ext/releases/download/${KKE_VERSION}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
+            ensure_success $sh_c "curl ${CURL_TRY} -kLO https://github.com/beclab/kubekey-ext/releases/download/${KKE_VERSION}/kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
         fi
         ensure_success $sh_c "tar xf kubekey-ext-v${KKE_VERSION}-linux-amd64.tar.gz"
         ensure_success $sh_c "cat /etc/resolv.conf.bak > /etc/resolv.conf"
     else
-    	ensure_success $sh_c "curl -sfL https://raw.githubusercontent.com/eball/kubekey-ext/master/downloadKKE.sh | VERSION=${KKE_VERSION} bash -"
+    	ensure_success $sh_c "curl -sfL https://raw.githubusercontent.com/beclab/kubekey-ext/master/downloadKKE.sh | VERSION=${KKE_VERSION} bash -"
     fi
     ensure_success $sh_c "chmod +x kk"
 
@@ -125,6 +125,7 @@ docker_files=(/usr/bin/docker*
 /var/lib/docker
 /var/run/docker*
 /var/lib/dockershim
+/usr/local/bin/containerd
 /etc/docker
 /etc/cni/net.d)
 
@@ -161,6 +162,7 @@ terminus_files=(
 /usr/local/bin/velero
 /etc/systemd/system/redis-server.service
 /etc/systemd/system/minio.service
+/etc/systemd/system/minio-operator.service
 /etc/systemd/system/juicefs.service
 /etc/systemd/system/containerd.service
 )
@@ -169,7 +171,7 @@ remove_storage() {
     log_info 'destroy storage'
 
     # stop and disable service
-    for srv in juicefs minio redis-server; do
+    for srv in juicefs minio minio-operator redis-server; do
         $sh_c "systemctl stop $srv 2>/dev/null; systemctl disable $srv 2>/dev/null; true"
     done
     
@@ -199,18 +201,21 @@ remove_mount() {
 
         local s3
         log_info 'remove juicefs s3 mount'
-        ensure_success $sh_c "apt install unzip"
-        ensure_success $sh_c 'curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"'
-        ensure_success $sh_c "unzip -q awscliv2.zip"
-        ensure_success $sh_c "./aws/install --update"
 
+        if ! command_exists aws; then 
+            ensure_success $sh_c "apt install unzip"
+            ensure_success $sh_c 'curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"'
+            ensure_success $sh_c "unzip -q awscliv2.zip"
+            ensure_success $sh_c "./aws/install --update"
+        fi
+        
         AWS=$(command -v aws)
 
         s3=$($sh_c "echo $s3_bucket | rev | cut -d '.' -f 5 | rev")
         s3=$($sh_c "echo $s3 | sed 's/https/s3/'")
 
         log_info 'clean juicefs s3 mount'
-        ensure_success $sh_c "${AWS} s3 rm $s3/rootfs --recursive"
+        ensure_success $sh_c "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID_SETUP} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY_SETUP} AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN_SETUP} ${AWS} s3 rm $s3/${CLUSTER_ID} --recursive"
     fi
 }
 
