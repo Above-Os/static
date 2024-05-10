@@ -105,7 +105,7 @@ remove_cluster(){
     fi
     ensure_success $sh_c "chmod +x kk"
 
-    if [ -z x"$forceUninstall" ]; then
+    if [ -z "$forceUninstall" ]; then
         echo
         read -r -p "Are you sure to delete this cluster? [yes/no]: " ans </dev/tty
 
@@ -223,6 +223,12 @@ remove_mount() {
 
         ensure_success $sh_c "umount -l /terminus/rootfs"
         ensure_success $sh_c "rm -rf /terminus"
+
+        # fixmounted=$($sh_c "mount |grep /terminus/rootfs 2>&1; true")
+        # if [ -n "$fixmounted" ]; then
+        #     ensure_success $sh_c "umount -l /terminus/rootfs"
+        #     ensure_success $sh_c "rm -rf /terminus"
+        # fi
     fi
 }
 
