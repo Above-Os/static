@@ -1,74 +1,70 @@
 [
     {
         "title": "Windows 11 Pro",
-        "value": "https://cdn.joinolares.cn/iso/Win11_24H2_English_x64.iso"
+        "value": "iso/Win11_24H2_English_x64.iso"
     },
     {
         "title": "Windows 11 LTSC",
-        "value": "11l"
+        "value": "iso/win11_23_enterprise_oem_x64_1.iso"
     },
     {
         "title": "Windows 11 Enterprise",
-        "value": "11e"
+        "value": "iso/win11_23h2_x64_1.iso"
     },
     {
         "title": "Windows 10 Pro",
-        "value": "https://cdn.olares.com/iso/Win10_22H2_English_x64v1.iso"
+        "value": "iso/Win10_22H2_English_x64v1.iso"
     },
     {
         "title": "Windows 10 LTSC",
-        "value": "10l"
+        "value": "iso/win10_ltsc_2021_x64_1.iso"
     },
     {
         "title": "Windows 10 Enterprise",
-        "value": "10e"
+        "value": "iso/win10_22h2_x64_1.iso"
     },
     {
         "title": "Windows 8.1 Enterprise",
-        "value": "8e"
+        "value": "iso/win8_1_enterprise_x64.iso"
     },
     {
         "title": "Windows 7 Ultimate",
-        "value": "7u"
+        "value": "iso/win7_sp1_x64_1.iso"
     },
     {
         "title": "Windows Vista Ultimate",
-        "value": "vu"
-    },
-    {
-        "title": "Windows XP Professional",
-        "value": "xp"
+        "value": "iso/vista_sp2_x64_1.iso"
     },
     {
         "title": "Windows 2000 Professional",
-        "value": "2k"
+        "value": "iso/5_00_2195_client_professional_x86.iso"
     },
     {
         "title": "Windows Server 2025",
-        "value": "2025"
+        "value": "iso/en_us_windows_server_2025_updated_oct_2025_x64_dvd_6c0c5aa8.iso"
     },
     {
         "title": "Windows Server 2022",
-        "value": "2022"
+        "value": "iso/en_us_windows_server_2022_updated_oct_2025_x64_dvd_26e9af36.iso"
     },
     {
         "title": "Windows Server 2019",
-        "value": "2019"
+        "value": "iso/win_server_2019_aug2021_x64.iso"
     },
     {
         "title": "Windows Server 2016",
-        "value": "2016"
+        "value": "iso/en_windows_server_2016_updated_feb_2018_x64_dvd_11636692.iso"
     },
     {
         "title": "Windows Server 2012",
-        "value": "2012"
+        "value": "iso/en_windows_server_2012_r2_with_update_x64_dvd_6052708_004.iso"
     },
     {
         "title": "Windows Server 2008",
-        "value": "2008"
+        "value": "iso/en_windows_server_2008_r2_with_sp1_x64_dvd_617601_018.iso"
     },
     {
         "title": "Windows Server 2003",
-        "value": "2003"
+        "value": "iso/win_srv_2003_r2_sp2_x64.iso"
     }
 ]
