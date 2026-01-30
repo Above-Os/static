@@ -1,0 +1,22 @@
+[
+    {
+        "title": "MacOS 14 Sonoma",
+        "value": "iso/macos-14-sonoma-recovery.dmg"
+    },
+    {
+        "title": "MacOS 13 Ventura",
+        "value": "iso/macos-13-ventura-recovery.dmg"
+    },
+    {
+        "title": " MacOS 12 Monterey",
+        "value": "iso/macos-12-monterey-recovery.dmg"
+    },
+    {
+        "title": " macOS 11 Big Sur",
+        "value": "iso/macos-11-bigsur-recovery.dmg"
+    },
+    {
+        "title": "macOS 10 Catalina",
+        "value": "iso/macos-10-catalina-recovery.dmg"
+    }
+]
