@@ -1,0 +1,26 @@
+[
+  {
+    "title": "Windows 11 Pro",
+    "value": "iso/en-us_windows_10_22h2_arm64.iso"
+  },
+  {
+    "title": "Windows 11 LTSC",
+    "value": "iso/en-us_windows_10_iot_enterprise_ltsc_2021_arm64_dvd_e8d4fc46.iso"
+  },
+  {
+    "title": "Windows 11 Enterprise",
+    "value": "iso/en-us_windows_10_22h2_arm64.iso"
+  },
+  {
+    "title": "Windows 10 Pro",
+    "value": "iso/26200.6584.250915-1905.25h2_ge_release_svc_refresh_CLIENT_CONSUMER_a64fre_en-us.iso"
+  },
+  {
+    "title": "Windows 10 LTSC",
+    "value": "iso/26100.1.240331-1435.ge_release_CLIENT_IOT_LTSC_EVAL_A64FRE_en-us.iso"
+  },
+  {
+    "title": "Windows 10 Enterprise",
+    "value": "iso/26100.1.240331-1435.ge_release_CLIENTENTERPRISEEVAL_OEMRET_A64FRE_en-us.iso"
+  }
+]
